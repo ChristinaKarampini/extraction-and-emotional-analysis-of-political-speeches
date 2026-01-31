@@ -1,0 +1,132 @@
+!pip install -q transformers datasets torch accelerate
+
+import torch
+import torch.nn as nn
+from transformers import (
+    XLMRobertaTokenizer,
+    XLMRobertaModel,
+    Trainer,
+    TrainingArguments
+)
+from datasets import Dataset
+
+tokenizer = XLMRobertaTokenizer.from_pretrained("xlm-roberta-base")
+
+def tokenize(batch):
+    return tokenizer(
+        batch["text"],
+        padding="longest",
+        truncation=True,
+        max_length=256
+    )
+#Example
+data = {
+    "text": [
+        "In June and in September, I asked the Leader of the House about prioritising research into childhood cancers and he was very helpful both times, following up his and my correspondence to the Department of Health and Social Care on that issue. Despite our chasing up, it took a very disappointing 118 days for the Department to respond to my initial inquiry and, unfortunately, the response, once received, was not worth waiting for; it added nothing about research into childhood cancers and was a grave disappointment to my constituent. Every single day counts for families in this situation and I wonder whether the Leader of the House could provide Government time for a debate on why a clear focus on research into childhood cancers matters so much.",
+        "Incidentally, I am not right honourable, but my hon. Friend makes an important point. I have a view about that; I am not sure whether it will end up being the settled view of the House. It seems illogical to me that two Members of the House, one of whom is a Minister, could be wined and dined at Wimbledon on a ticket that costs £2,500, then the Minister does not have to register that with the House and never has to register its value, even though they might be the Minister who makes decisions about tennis funding in the UK, whereas the Member who is not a Minister has to register it within 28 days. It seems perverse, and it is difficult for members of the public, who might want to see all the information about an individual MP in one place."
+    ],
+    "stance": [0, 1],
+    "frame": [3, 3],
+    "intensity": [1, 2],
+    "sentiment": [0, 1],
+    "emotion": [4, 2]
+}
+#Hugging Face
+dataset = Dataset.from_dict(data)
+dataset = dataset.map(tokenize, batched=True)
+dataset.set_format("torch")
+
+class MultiTaskModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.encoder = XLMRobertaModel.from_pretrained(
+            "xlm-roberta-base"
+        )
+        h = self.encoder.config.hidden_size
+
+        self.stance = nn.Linear(h, 4)
+        self.frame = nn.Linear(h, 5)
+        self.intensity = nn.Linear(h, 3)
+        self.sentiment = nn.Linear(h, 3)
+        self.emotion = nn.Linear(h, 8)
+
+        self.loss_fn = nn.CrossEntropyLoss()
+
+    def forward(
+        self,
+        input_ids,
+        attention_mask,
+        stance=None,
+        frame=None,
+        intensity=None,
+        sentiment=None,
+        emotion=None
+    ):
+        out = self.encoder(
+            input_ids=input_ids,
+            attention_mask=attention_mask
+        )
+
+        cls = out.last_hidden_state[:, 0]
+
+        stance_logits = self.stance(cls)
+        frame_logits = self.frame(cls)
+        intensity_logits = self.intensity(cls)
+        sentiment_logits = self.sentiment(cls)
+        emotion_logits = self.emotion(cls)
+
+        loss = None
+        if stance is not None:
+            loss = (
+                self.loss_fn(stance_logits, stance) +
+                self.loss_fn(frame_logits, frame) +
+                self.loss_fn(intensity_logits, intensity) +
+                self.loss_fn(sentiment_logits, sentiment) +
+                self.loss_fn(emotion_logits, emotion)
+            )
+
+        return {
+            "loss": loss,
+            "stance": stance_logits,
+            "frame": frame_logits,
+            "intensity": intensity_logits,
+            "sentiment": sentiment_logits,
+            "emotion": emotion_logits
+        }
+#train
+training_args = TrainingArguments(
+    output_dir="./results",
+    per_device_train_batch_size=4,
+    num_train_epochs=3,
+    learning_rate=2e-5,
+    logging_steps=10,
+    save_strategy="no",
+    report_to="none"
+)
+
+model = MultiTaskModel()
+
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=dataset
+)
+
+trainer.train()
+
+text = "We must choose courage over fear and responsibility over convenience. When decisions are guided solely by short-term gain, we inherit long-term injustice. True leadership means protecting the vulnerable, investing in the common good, and acting with honesty even when it is difficult. Our future depends on trust—trust in institutions, trust in one another, and trust in the belief that fairness is not a weakness, but a strength. Let us reject politics driven by division and embrace a vision grounded in solidarity, accountability, and hope."
+inputs = tokenizer(
+    text,
+    return_tensors="pt",
+    truncation=True,
+    max_length=256
+)
+
+with torch.no_grad():
+    outputs = model(**inputs)
+
+print("Stance:", outputs["stance"].argmax().item())
+print("Frame:", outputs["frame"].argmax().item())
+print("Intensity:", outputs["intensity"].argmax().item())
+print("Sentiment:", outputs["sentiment"].argmax().item())
+print("Emotion:", outputs["emotion"].argmax().item())
