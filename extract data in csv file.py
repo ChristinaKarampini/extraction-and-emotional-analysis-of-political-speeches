@@ -5,7 +5,7 @@ from tqdm import tqdm
 import glob
 
 # -----------------------------
-# 1 Load speaker metadata
+# Load speaker metadata
 # -----------------------------
 def load_speaker_metadata(metadata_file):
     tree = etree.parse(metadata_file)
@@ -17,14 +17,13 @@ def load_speaker_metadata(metadata_file):
         gender = person.xpath(".//tei:sex/@value", namespaces=ns)
         gender = gender[0] if gender else None
 
-        # affiliation → party/orgRef
         party_ref = person.xpath(".//tei:affiliation[@role='member']/@ref", namespaces=ns)
         party_id = party_ref[0].lstrip("#") if party_ref else None
         speakers[speaker_id] = {"name": name, "gender": gender, "party": party_id}
     return speakers
 
 # -----------------------------
-# 3 Load political orientation
+# Load political orientation
 # -----------------------------
 def load_political_orientation(taxonomy_file):    
     tree = etree.parse(taxonomy_file)
@@ -40,7 +39,7 @@ def load_political_orientation(taxonomy_file):
     return orientation_map
 
 # -----------------------------
-# 2 Load organization metadata
+# Load organization metadata
 # -----------------------------
 def load_org_metadata(org_file, taxonomy_map):
     tree = etree.parse(org_file)
@@ -70,7 +69,7 @@ def load_org_metadata(org_file, taxonomy_map):
     return orgs, orgs_type, party_orientation
 
 # -----------------------------
-# 4 Extract speeches from debate XML
+# Extract speeches from debate XML
 # -----------------------------
 def extract_speeches(xml_file):
     tree = etree.parse(xml_file)
@@ -113,20 +112,20 @@ def extract_speeches(xml_file):
     return speeches
 
 # -----------------------------
-# 4️⃣ File paths
+# File paths
 # -----------------------------
 metadata_file = r"D:\download\ParlaMint-GB\ParlaMint-GB.TEI\ParlaMint-GB-listPerson.xml"
 org_file = r"D:\download\ParlaMint-GB\ParlaMint-GB.TEI\ParlaMint-GB-listOrg.xml"
 xml_path = r"D:\download\ParlaMint-GB\ParlaMint-GB.TEI\**\*.xml"
 taxonomy_file = r"D:\download\ParlaMint-GB\ParlaMint-GB.TEI\ParlaMint-taxonomy-politicalOrientation.xml"
 # -----------------------------
-# 5️⃣ Load metadata
+# Load metadata
 # -----------------------------
 speakers = load_speaker_metadata(metadata_file)
 taxonomy_map = load_political_orientation(taxonomy_file)
 orgs, orgs_type, party_orientation = load_org_metadata(org_file, taxonomy_map)
 # -----------------------------
-# 6️⃣ Find XML files (exclude metadata/taxonomy)
+# Find XML files (exclude metadata/taxonomy)
 # -----------------------------
 all_files = glob.glob(xml_path, recursive=True)
 exclude_keywords = ["listPerson", "listOrg", "taxonomy"]
@@ -134,7 +133,7 @@ xml_files = [f for f in all_files]
 print(f"Found {len(xml_files)}\n")
 
 # -----------------------------
-# 7️⃣ Extract speeches
+# Extract speeches
 # -----------------------------
 all_data = []
 for xml_file in tqdm(xml_files, desc="Processing XML files"):
@@ -144,7 +143,7 @@ for xml_file in tqdm(xml_files, desc="Processing XML files"):
         print("Error parsing:", xml_file, e)
 
 # -----------------------------
-# 8️⃣ Create DataFrame and add metadata
+# Create DataFrame and add metadata
 # -----------------------------
 df = pd.DataFrame(all_data)
 
@@ -158,13 +157,12 @@ df["party_name"] = df["party_id"].map(orgs)
 df["chamber"] = df["party_id"].map(orgs_type)
 df["political_orientation"] = df["party_id"].map(party_orientation)
 
-# Add file name
-#df["file"] = [Path(f).name for f in xml_files for _ in range(len(df))]
 print("Done!")
 # -----------------------------
-# 9️⃣ Save CSV
+# Save CSV
 # -----------------------------
 output_file = "D:/download/ParlaMint-GB/full_data_parlamint_gb.csv"
 df.to_csv(output_file, index=False, encoding="utf-8-sig")
 print("Saved CSV to:", output_file)
+
 print(df.head())
