@@ -1,0 +1,1 @@
+# extraction-and-emotional-analysis-of-political-speeches
