@@ -1,0 +1,31 @@
+import csv
+import random
+import sys
+from google.colab import drive
+drive.mount('/content/drive')
+
+#Handling CSV file with wide columns
+csv.field_size_limit(sys.maxsize)
+
+input_csv = "/content/drive/MyDrive/full_data_parlamint_gb.csv"
+output_csv = "/content/drive/MyDrive/text_300_sample.csv"
+sample_size=300
+
+reservoir = []
+
+with open(input_csv, newline="", encoding="utf-8", errors="ignore") as f:
+        reader = csv.DictReader(f, delimiter=",", quotechar='"')
+        header = reader.fieldnames
+        print(header)
+        rows = list(reader)
+
+# Παίρνουμε τυχαίο δείγμα με μέγιστο sample_size
+sample = random.sample(rows, min(sample_size, len(rows)))
+
+print("First row (header?):", rows[0] if rows else "EMPTY FILE")
+print("Second row:", rows[1] if len(rows) > 1 else "NO DATA")
+
+with open(output_csv, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=header, quoting=csv.QUOTE_ALL)
+        writer.writeheader()
+        writer.writerows(sample)
